@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es" data-ui="terminal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enmascarador de voz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+<div class="term-titlebar" aria-hidden="true">
+  <span class="dots"><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span></span>
+  <span class="term-titletext">fxmps@kali: ~/BlackoutVoid</span>
+</div>
+<div class="term-body">
+
+  <pre class="term-banner" aria-hidden="true">          ,ud$$i$$$$i:.
+        ,ud$$$$i$$ii$$i:.
+       ,$$    $s$ssIiiii:.
+      jI7      $$$      i8,
+     .i7       dªk       ªs.
+     ?-    _,J'   `L,     ss
+      S$$$$jL   .   Jb:?$$?i
+     :$$S7jS$S$$IiiiiiiS$i;
+     ``   \$:.^^^^":$/   `"
+       j   ?`       ?    j
+       $:  "   By:  "   :$
+       :$i    FxMps     i$
+        ?$/,          ,\$
+         $k,_/!i[.\,J?:;
+            SS$$$$SIi:
+            ":S$$SI:"</pre>
+
+  <h1>Enmascarador de voz para salas de reunión</h1>
+
+  <div class="scope">
+    <canvas id="scope" aria-label="Espectro en tiempo real de la señal generada"></canvas>
+    <canvas id="waterfall" aria-hidden="true"></canvas>
+    <div class="scope-foot">
+      <span><span class="swatch" style="background:var(--trace)"></span>Señal generada</span>
+      <span><span class="swatch" style="background:var(--speechband);border:1px solid var(--signal)"></span>Banda que da inteligibilidad (200 Hz – 6 kHz)</span>
+      <span><span class="swatch swatch-grad" aria-hidden="true"></span>Cascada (histórico reciente)</span>
+      <span class="readout" id="meter">— dBFS</span>
+    </div>
+  </div>
+
+  <div class="transport">
+    <button type="button" id="power" class="primary">Encender</button>
+    <span class="led" id="led" aria-hidden="true"></span><span class="readout" id="status" role="status" aria-live="polite"></span>
+  </div>
+
+  <!-- Reproduce el mismo audio que genera el motor (ver js/audio-engine.js
+       y js/ui.js). Al pasar por un <audio> real en vez de solo por
+       AudioContext.destination, el navegador lo trata como una
+       reproducción de medios y puede seguir sonando con la pantalla
+       apagada o la pestaña en segundo plano. -->
+  <audio id="bgAudio" playsinline hidden></audio>
+
+  <div class="cols">
+    <div>
+      <div class="panel">
+        <h2>Nivel y mezcla</h2>
+
+        <div class="big-ctrl">
+          <div class="top">
+            <label class="fader-label" for="master">Nivel de salida</label>
+            <span class="fader-val" id="masterVal">-18.0 dB</span>
+          </div>
+          <input type="range" id="master" min="-60" max="0" step="0.5" value="-18">
+          <p class="hint">Objetivo en el punto de escucha del intruso: 45–48 dBA. Por debajo de 42 no enmascara; por encima de 48 la gente se queja y sube la voz.</p>
+        </div>
+
+        <div class="big-ctrl">
+          <div class="top">
+            <label class="fader-label" for="noiseColor">Color de ruido</label>
+            <span class="fader-val" id="noiseColorVal">0 % blanco</span>
+          </div>
+          <input type="range" id="noiseColor" min="0" max="100" step="1" value="0">
+          <p class="hint">0 % es el rosa original (cae -3 dB/octava, como la energía de la voz). Subir hacia blanco reparte más energía en agudos — a veces ayuda si el hueco de fuga deja pasar sobre todo graves, pero suele sonar más áspero al oído. La mezcla pasa por el mismo ecualizador de bandas y los mismos presets de abajo.</p>
+        </div>
+
+        <div class="big-ctrl">
+          <div class="top">
+            <label class="fader-label" for="babble">Murmullo</label>
+            <span class="fader-val" id="babbleVal">40 %</span>
+          </div>
+          <input type="range" id="babble" min="0" max="100" step="1" value="40">
+          <p class="hint">El ruido estacionario se le quita a una grabación con cualquier denoiser moderno. El murmullo no, porque se parece a lo que intentas ocultar. Súbelo si te preocupa una grabadora, bájalo si solo te preocupa que se oiga a través de la puerta.</p>
+        </div>
+
+        <div class="big-ctrl">
+          <div class="top">
+            <label class="fader-label" for="wander">Deriva</label>
+            <span class="fader-val" id="wanderVal">1.5 dB</span>
+          </div>
+          <input type="range" id="wander" min="0" max="4" step="0.1" value="1.5">
+          <p class="hint">Variación lenta de nivel. Evita que el ruido suene a tono fijo y molesto, y rompe un poco su estacionariedad.</p>
+        </div>
+      </div>
+
+      <fieldset class="panel">
+        <legend>Espectro</legend>
+        <div class="presets" id="presets">
+          <button type="button" class="ghost" data-preset="puerta">Puerta y pasillo</button>
+          <button type="button" class="ghost" data-preset="grabadora">Contra grabadora</button>
+          <button type="button" class="ghost" data-preset="pleno">Pleno y conductos</button>
+          <button type="button" class="ghost" data-preset="cristal">Cristal y ventana</button>
+          <button type="button" class="ghost" data-preset="plano">Plano</button>
+        </div>
+        <div id="bands"></div>
+      </fieldset>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>Calibración</h2>
+        <p style="font-size:.9rem;color:var(--ink-soft)">Mide con un sonómetro (ponderación A, respuesta lenta) donde estaría quien escucha, y escribe la lectura. A partir de ahí el panel estima el dBA al mover el nivel.</p>
+        <div class="calib">
+          <label for="calIn" class="fader-label" style="width:auto">Lectura</label>
+          <input type="number" id="calIn" placeholder="dBA" step="0.1">
+          <button type="button" id="calBtn">Fijar referencia</button>
+        </div>
+        <p class="readout" style="margin-top:.8rem" id="calOut">Sin calibrar</p>
+      </div>
+
+      <div class="panel advanced-panel">
+        <h2>Módulos Avanzados</h2>
+
+        <div class="toggle-row">
+          <div>
+            <label class="fader-label" for="ultrasonicToggle">Ultrasónico</label>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="ultrasonicToggle">
+            <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          </label>
+        </div>
+
+        <div class="big-ctrl advanced-level">
+          <div class="top">
+            <label class="fader-label" for="ultrasonicIntensity">Intensidad Ultrasónica</label>
+            <span class="fader-val" id="ultrasonicIntensityVal">35 %</span>
+          </div>
+          <input type="range" id="ultrasonicIntensity" min="0" max="100" step="1" value="35">
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <label class="fader-label" for="antiDenoiserToggle">Anti-Denoiser</label>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="antiDenoiserToggle">
+            <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          </label>
+        </div>
+
+        <div class="big-ctrl advanced-level">
+          <div class="top">
+            <label class="fader-label" for="antiDenoiserIntensity">Confusión Algorítmica</label>
+            <span class="fader-val" id="antiDenoiserIntensityVal">45 %</span>
+          </div>
+          <input type="range" id="antiDenoiserIntensity" min="0" max="100" step="1" value="45">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Dónde ponerlo</h2>
+        <p class="note"><strong>Fuera de la sala, nunca dentro.</strong> Dentro solo consigues que todos hablen más alto, y una grabadora cerca de quien habla sigue teniendo buena relación señal-ruido.</p>
+        <div class="tbl-scroll">
+        <table>
+          <tr><th scope="col">Vía de fuga</th><th scope="col">Dónde va el altavoz</th></tr>
+          <tr><td>Hueco bajo la puerta</td><td>A 1–2 m de la puerta, en el pasillo, apuntando a la pared opuesta</td></tr>
+          <tr><td>Tabique que muere en el falso techo</td><td>Altavoz en el pleno, sobre la sala contigua</td></tr>
+          <tr><td>Conducto de clima compartido</td><td>En la estancia que recibe, cerca de la rejilla</td></tr>
+          <tr><td>Cristal o Ventana</td><td>Junto al cristal, del lado exterior</td></tr>
+        </table>
+        </div>
+        <p style="font-size:.9rem;color:var(--ink-soft);margin-bottom:0">Dos o más altavoces pequeños repartidos funcionan mucho mejor que uno grande: el campo queda uniforme y no hay un punto donde el intruso se salga del ruido.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Comprobarlo</h2>
+        <p style="font-size:.9rem;color:var(--ink-soft);margin-bottom:0">Alguien lee en voz normal dentro de la sala una lista de palabras sueltas sin relación entre sí. Otra persona fuera, en el punto crítico, apunta las que entiende. Por debajo del 10 % de aciertos hay privacidad razonable. Con frases no vale: el contexto permite rellenar huecos y el resultado engaña.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Enmascarar reduce la inteligibilidad de lo que se fuga.
+  </footer>
+
+</div>
+</div>
+
+<script src="js/state.js"></script>
+<script src="js/dsp.js"></script>
+<script src="js/advanced-engines.js"></script>
+<script src="js/audio-engine.js"></script>
+<script src="js/scope.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
