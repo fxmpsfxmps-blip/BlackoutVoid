@@ -79,6 +79,12 @@ window.EV = window.EV || {};
     var statusEl = document.getElementById("status");
     var ledEl = document.getElementById("led");
     var bgAudio = document.getElementById("bgAudio");
+    var ultrasonicNote = document.getElementById("ultrasonicNote");
+
+    function isIOS(){
+      return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    }
 
     function setStatus(text){ statusEl.textContent = text; }
     function setLed(on){ ledEl.classList.toggle("on", !!on); }
@@ -93,9 +99,25 @@ window.EV = window.EV || {};
     function setMediaSession(playing){
       if(!("mediaSession" in navigator)) return;
       if(!navigator.mediaSession.metadata){
-        navigator.mediaSession.metadata = new MediaMetadata({ title: "Enmascarador de voz", artist: "FxMps" });
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: "BlackoutVoid",
+          artist: "FxMps",
+          artwork: [{ src: "assets/favicon.png", sizes: "267x242", type: "image/png" }]
+        });
       }
       navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+    }
+
+    function paintUltrasonicSupport(){
+      var range = engine.getUltrasonicRange();
+      var rangeText = range ?
+        (range.min / 1000).toFixed(1) + "–" + (range.max / 1000).toFixed(1) + " kHz" :
+        "el rango que permita el dispositivo";
+      if(isIOS()){
+        ultrasonicNote.textContent = "Rango generado: " + rangeText + ". El altavoz del iPhone suele recortar estas frecuencias; para un cambio audible usa Anti-Denoiser o una salida externa de alta frecuencia.";
+      }else{
+        ultrasonicNote.textContent = "Rango generado: " + rangeText + ". Esta señal puede ser inaudible aunque el módulo esté activo.";
+      }
     }
 
     function enforceUltrasonicMasterCap(){
@@ -112,6 +134,7 @@ window.EV = window.EV || {};
       enforceUltrasonicMasterCap();
       engine.start(state.master);
       playBgAudio();
+      paintUltrasonicSupport();
       powerBtn.textContent = "Apagar";
       powerBtn.classList.remove("primary");
       setStatus("");
@@ -140,18 +163,18 @@ window.EV = window.EV || {};
       if(!engine.isBuilt()){
         setStatus("Generando el ruido…");
         powerBtn.disabled = true;
-        setTimeout(function(){
-          try{
-            engine.build(state);
-          }catch(err){
-            console.error(err);
-            setStatus("El audio no arrancó. Recarga la página y vuelve a intentarlo.");
-            powerBtn.disabled = false;
-            return;
+        try{
+          if(navigator.audioSession && "type" in navigator.audioSession){
+            navigator.audioSession.type = "playback";
           }
+          engine.build(state);
           powerBtn.disabled = false;
           turnOn();
-        }, 30);
+        }catch(err){
+          console.error(err);
+          setStatus("El audio no arrancó. Recarga la página y vuelve a intentarlo.");
+          powerBtn.disabled = false;
+        }
         return;
       }
       turnOn();
@@ -283,6 +306,7 @@ window.EV = window.EV || {};
     uCtl.el.value = state.ultrasonicIntensity; uCtl.paint(state.ultrasonicIntensity);
     aCtl.el.value = state.antiDenoiserIntensity; aCtl.paint(state.antiDenoiserIntensity);
     paintAdvancedState();
+    paintUltrasonicSupport();
     paintCal();
 
     // Mantiene la estimación SPL sincronizada con la energía total real.

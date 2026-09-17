@@ -411,6 +411,12 @@ footer{margin-top:2rem;padding-top:1rem;border-top:1px solid var(--line);color:v
 }
 .advanced-level{margin-bottom:1rem}
 .advanced-level:last-child{margin-bottom:0}
+.module-note{
+  margin:.55rem 0 0;
+  color:var(--ink-soft);
+  font-size:.75rem;
+  line-height:1.45;
+}
 .switch{display:inline-flex;align-items:center;cursor:pointer}
 .switch input{position:absolute;opacity:0;pointer-events:none}
 .switch-track{

@@ -125,6 +125,10 @@ window.EV = window.EV || {};
     setFMRate(hz){
       this.fmLfo.frequency.setTargetAtTime(clamp(hz, 1, 10), this.ctx.currentTime, 0.05);
     }
+
+    getRange(){
+      return { min: this.minCarrier, max: this.maxCarrier, sampleRate: this.ctx.sampleRate };
+    }
   }
 
   class AntiDenoiserEngine {
@@ -138,7 +142,7 @@ window.EV = window.EV || {};
       this.filters = [];
 
       this.output = ctx.createGain();
-      this.output.gain.value = 0.42;
+      this.output.gain.value = 0.48;
 
       this.delay = ctx.createDelay(0.2);
       this.delay.delayTime.value = clamp(this.delaySeconds, 0, 0.2);

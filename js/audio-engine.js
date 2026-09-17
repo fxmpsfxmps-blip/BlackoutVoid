@@ -9,7 +9,7 @@ window.EV = window.EV || {};
 
   function dbDelta(d){ return (Math.pow(10, d / 20) - 1) * 0.5; }
   function babbleCurve(pct){ return Math.pow(pct / 100, 1.6) * 0.75; }
-  function antiCurve(pct){ return Math.pow(pct / 100, 1.45) * 0.72; }
+  function antiCurve(pct){ return Math.pow(pct / 100, 1.3) * 0.95; }
   function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 
   function createEngine(){
@@ -83,7 +83,12 @@ window.EV = window.EV || {};
     function build(state){
       stateRef = state;
       requestedMasterDb = state.master;
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      try{
+        ctx = new AudioContextClass({ latencyHint: "playback" });
+      }catch(e){
+        ctx = new AudioContextClass();
+      }
       var pink = dsp.makePinkBuffer(ctx, 18);
       var white = dsp.makeWhiteBuffer(ctx, 18);
 
@@ -198,6 +203,7 @@ window.EV = window.EV || {};
       getStream: function(){ return streamDest ? streamDest.stream : null; },
       getOutputDbfs: getOutputDbfs,
       getUltrasonicMasterCapDb: function(){ return ULTRASONIC_MASTER_CAP_DB; },
+      getUltrasonicRange: function(){ return ultrasonic ? ultrasonic.getRange() : null; },
       isUltrasonicEnabled: function(){ return ultrasonicEnabled; },
       isAntiDenoiserEnabled: function(){ return antiEnabled; },
 
@@ -205,7 +211,7 @@ window.EV = window.EV || {};
 
       start: function(masterDb){
         if(!built) return;
-        if(ctx.state === "suspended") ctx.resume();
+        if(ctx.state === "suspended") ctx.resume().catch(function(){});
         running = true;
         requestedMasterDb = masterDb;
         applyMaster(masterDb, 0.4);
